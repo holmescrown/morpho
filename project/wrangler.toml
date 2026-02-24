@@ -1,0 +1,20 @@
+name = "project-morpho-engine"
+main = "worker/src/index.ts"
+compatibility_date = "2024-02-24"
+
+# 开启 Workers AI 绑定
+[ai]
+binding = "AI"
+
+# 绑定 Durable Objects，作为物种的"生命岛屿"
+[[durable_objects.bindings]]
+name = "MORPHO_ISLAND"
+class_name = "MorphoDO"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["MorphoDO"]
+
+# 为了方便本地前端调试，开启静态资源托管 (MVP 阶段)
+[site]
+bucket = "./frontend"
