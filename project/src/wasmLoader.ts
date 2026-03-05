@@ -1,13 +1,14 @@
 // src/wasmLoader.ts - Helper to load the Wasm physics module
 export async function loadPhysicsWasm(wasmBinary: ArrayBuffer) {
-    const { instance } = await WebAssembly.instantiate(wasmBinary, {
+    const result = await WebAssembly.instantiate(wasmBinary, {
         env: {
             abort: (msg: any, file: any, line: any, col: any) => {
                 console.error(`Abort called: ${msg} at ${file}:${line}:${col}`);
             }
         }
-    });
+    }) as any;
 
+    const instance = result.instance || result;
     const exports = instance.exports as any;
 
     return {

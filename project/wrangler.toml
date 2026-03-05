@@ -8,13 +8,13 @@ bucket = "./public"
 
 # 数据库绑定
 [[d1_databases]]
-binding = "MORPHO_DB"
+binding = "DB"
 database_name = "morpho_evolution_db"
 database_id = "your-d1-db-id"
 
 # Durable Objects 绑定
 [[durable_objects.bindings]]
-name = "MORPHO_BIOME"
+name = "BIOME_STATE"
 class_name = "LifeCycleManager"
 
 [[migrations]]
@@ -23,13 +23,13 @@ new_classes = ["LifeCycleManager"]
 
 # AI 与 存储 绑定
 [ai]
-binding = "MORPHO_AI"
+binding = "AI"
 
 [[r2_buckets]]
-binding = "MORPHO_R2"
+binding = "R2"
 bucket_name = "morpho-assets"
 
 # Vectorize 向量索引绑定
 [[vectorize]]
-binding = "MORPHO_VECTOR"
+binding = "VECTOR_INDEX"
 index_name = "morpho-vectors"

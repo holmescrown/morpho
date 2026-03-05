@@ -124,9 +124,10 @@ function applyGenomeToMorphology(genome) {
     if (!genome) return;
     window.currentGenomeData = genome;
 
-    // 动态缩放
-    if (genome.radius) {
-        const scale = genome.radius / 5.0;
+    // 动态缩放 (兼容 P0.5 深层结构)
+    const radius = genome.morphology?.hox_segments?.[0]?.scaling?.radius || genome.radius;
+    if (radius) {
+        const scale = radius / 5.0;
         spore.scale.set(scale, scale, scale);
     }
 
@@ -136,16 +137,12 @@ function applyGenomeToMorphology(genome) {
     }
 
     // Material Storytelling: 质感即数据
-    if (genome.turgor_pressure !== undefined) {
-        // turgor_pressure 较高时，显得更加光洁透明
-        spore.material.transmission = Math.min(0.9, genome.turgor_pressure * 0.3);
-        spore.material.roughness = Math.max(0.1, 1.0 - (genome.turgor_pressure * 0.2));
-    }
+    const turgor = genome.turgor_pressure !== undefined ? genome.turgor_pressure : 1.0;
+    spore.material.transmission = Math.min(0.9, turgor * 0.3);
+    spore.material.roughness = Math.max(0.1, 1.0 - (turgor * 0.2));
 
-    if (genome.complexity !== undefined) {
-        // 复杂度越高，金属感越强
-        spore.material.metalness = Math.min(0.8, genome.complexity * 0.1);
-    }
+    const complexity = genome.complexity !== undefined ? genome.complexity : 1.0;
+    spore.material.metalness = Math.min(0.8, complexity * 0.1);
 }
 
 // 5. 动画循环 (加入轻微蠕动效果)
@@ -219,15 +216,16 @@ window.takePhotograph = () => {
     ctx.font = '16px monospace';
     ctx.fillText('NODE: Tokyo-Edge-01', 850, 180);
 
-    // 基因组数据展示
+    // 基因组数据展示 (兼容 P0.5 属性)
     const genome = window.currentGenomeData || { complexity: 1, energy_reserve: 100, turgor_pressure: 1, radius: 5 };
+    const curRadius = genome.morphology?.hox_segments?.[0]?.scaling?.radius || genome.radius || 5.0;
     ctx.fillStyle = '#aaaaaa';
     ctx.font = '14px monospace';
     const jsonStr = JSON.stringify({
-        radius: genome.radius?.toFixed(2) || '5.00',
-        complexity: genome.complexity?.toFixed(2) || '1.00',
-        turgor: genome.turgor_pressure?.toFixed(2) || '1.00',
-        energy: genome.energy_reserve?.toFixed(0) || '100'
+        radius: curRadius.toFixed(2),
+        complexity: (genome.complexity || 1.0).toFixed(2),
+        turgor: (genome.turgor_pressure || 1.0).toFixed(2),
+        energy: (genome.energy_reserve || 100).toFixed(0)
     }, null, 2);
 
     const lines = jsonStr.split('\n');

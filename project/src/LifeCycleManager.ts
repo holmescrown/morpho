@@ -20,8 +20,26 @@ export class LifeCycleManager {
     this.state = state;
     this.env = env;
 
-    // 初始原始孢子基因组 (Base Genome)
+    // 初始原始孢子基因组 (涵盖 P0.5 前端兼容与后端新规范)
     this.currentGenome = {
+      metadata: { genome_id: "morpho_origin_001", generation: 0 },
+      morphology: {
+        l_system_rules: { iterations: 2 },
+        hox_segments: [{ scaling: { length: 1.0, radius: 5.0, porosity: 0.2 }, joints: [{ stiffness: 0.5 }] }],
+        surface: { texture: "chitinous", reflectivity: 0.1, permeability: 0.05 }
+      },
+      metabolism: {
+        energy_storage_capacity: 100,
+        basal_metabolic_rate: 0.05,
+        efficiency_coefficients: { locomotion: 1.2, thermal_regulation: 0.8, neural_processing: 2.5 },
+        diet_type: "photosynthetic"
+      },
+      genetics: {
+        mutation_rate: 0.02,
+        recessive_traits: [],
+        semantic_memory: ["太古时代：诞生于富含矿物质的浅海"]
+      },
+      // 兼容旧版前端和物理验证的回退字段
       complexity: 1.0,
       traits: ["basal_metabolism"],
       turgor_pressure: 1.0,
@@ -92,7 +110,8 @@ export class LifeCycleManager {
 
     // 处理来自 Worker 的突变请求
     try {
-      const { mutation } = await request.json();
+      const body = await request.json() as any;
+      const mutation = body.mutation;
       const response = await this.applyEvolution(mutation);
       return new Response(JSON.stringify(response), {
         headers: { 'Content-Type': 'application/json' }
@@ -130,18 +149,37 @@ export class LifeCycleManager {
   }
 
   async applyEvolution(mutationProposal: any) {
-    // 1. 调用 Wasm 模块进行硬核物理审查
-    const isValid = await this.wasmValidate(mutationProposal);
+    // 1. 深拷贝当前基因组进行模拟验证 (P0.5 规范：通过 JSON Patch 合并改变)
+    const newGenome = JSON.parse(JSON.stringify(this.currentGenome));
+
+    // 2. 将 JSON Patch 深度应用到 newGenome
+    if (mutationProposal.patches && Array.isArray(mutationProposal.patches)) {
+      for (const patch of mutationProposal.patches) {
+        if (patch.op === 'replace' || patch.op === 'add') {
+          applyJsonPatch(newGenome, patch.path, patch.value);
+        }
+      }
+    }
+
+    // 3. 追加遗传记忆
+    if (mutationProposal.semanticMemoryEntry) {
+      if (!newGenome.genetics) newGenome.genetics = {};
+      if (!newGenome.genetics.semantic_memory) newGenome.genetics.semantic_memory = [];
+      newGenome.genetics.semantic_memory.push(mutationProposal.semanticMemoryEntry);
+    }
+
+    // 4. 调用 Wasm 模块进行硬核物理审查
+    const isValid = await this.wasmValidate(newGenome);
     if (!isValid) {
       return { status: "MALFORMED", genome: this.currentGenome };
     }
 
-    // 2. 计算 ATP 代谢代价
-    const atpCost = this.calculateATPCost(mutationProposal);
+    // 5. 计算 ATP 代谢代价
+    const atpCost = this.calculateATPCost(this.currentGenome, newGenome);
 
-    // 2.5 计算熵减带来的持续消耗
+    // 6. 计算熵减带来的持续消耗
     const entropyCost = this.physicsEngine
-      ? this.physicsEngine.calculateEntropy(this.currentGenome.complexity, this.currentGenome.adaptability)
+      ? this.physicsEngine.calculateEntropy(newGenome.complexity || 1.0, newGenome.adaptability || 1.0)
       : 0.1;
 
     const totalCost = atpCost + entropyCost;
@@ -154,12 +192,10 @@ export class LifeCycleManager {
       };
     }
 
-    // 3. 更新状态
-    this.currentGenome = {
-      ...this.currentGenome,
-      ...mutationProposal,
-      energy_reserve: this.currentGenome.energy_reserve - atpCost
-    };
+    // 7. 正式更新状态
+    newGenome.energy_reserve = this.currentGenome.energy_reserve - atpCost;
+    if (newGenome.metadata) newGenome.metadata.generation += 1;
+    this.currentGenome = newGenome;
 
     // 4. 广播给所有连接的前端
     this.broadcast({
@@ -185,47 +221,36 @@ export class LifeCycleManager {
     };
   }
 
-  private async wasmValidate(mutation: any): Promise<boolean> {
+  private async wasmValidate(genome: any): Promise<boolean> {
+    const radius = genome.morphology?.hox_segments?.[0]?.scaling?.radius || genome.radius || 5.0;
+    const turgor = genome.turgor_pressure || 1.0;
+
     if (this.physicsEngine) {
-      return this.physicsEngine.validateMutation(
-        mutation.radius || this.currentGenome.radius,
-        mutation.turgor_pressure || this.currentGenome.turgor_pressure,
-        this.currentGenome.complexity
-      );
+      return this.physicsEngine.validateMutation(radius, turgor, genome.complexity || 1.0);
     }
 
     // 回退到基于 TS 的简单验证
-    if (mutation.radius && (mutation.radius < 1 || mutation.radius > 20)) {
-      return false;
-    }
-
-    if (mutation.turgor_pressure && (mutation.turgor_pressure < 0.1 || mutation.turgor_pressure > 5.0)) {
-      return false;
-    }
+    if (radius < 0.1 || radius > 10.0) return false;
 
     return true;
   }
 
-  private calculateATPCost(mutation: any): number {
-    const newTraits = mutation.traits
-      ? mutation.traits.filter((t: string) => !this.currentGenome.traits.includes(t))
-      : [];
+  private calculateATPCost(oldGenome: any, newGenome: any): number {
+    const oldRadius = oldGenome.morphology?.hox_segments?.[0]?.scaling?.radius || oldGenome.radius || 5.0;
+    const newRadius = newGenome.morphology?.hox_segments?.[0]?.scaling?.radius || newGenome.radius || 5.0;
+    const oldTraits = oldGenome.traits || [];
+    const newTraits = newGenome.traits || [];
+    const newTraitsCount = newTraits.filter((t: string) => !oldTraits.includes(t)).length;
 
     if (this.physicsEngine) {
-      return this.physicsEngine.calculateATPCost(
-        this.currentGenome.radius,
-        mutation.radius || this.currentGenome.radius,
-        newTraits.length
-      );
+      return this.physicsEngine.calculateATPCost(oldRadius, newRadius, newTraitsCount);
     }
 
     // 回退到旧逻辑
     let cost = 0;
-    if (mutation.radius) {
-      const sizeChange = Math.abs(mutation.radius - this.currentGenome.radius);
-      cost += sizeChange * 10;
-    }
-    cost += newTraits.length * 20;
+    const sizeChange = Math.abs(newRadius - oldRadius);
+    cost += sizeChange * 10;
+    cost += newTraitsCount * 20;
     return cost;
   }
 
@@ -238,6 +263,22 @@ export class LifeCycleManager {
       }
     });
   }
+}
+
+// 供 P0.5 前端结构使用的深度取值赋值辅助函数
+function applyJsonPatch(obj: any, path: string, value: any) {
+  // 将 "a.b[0].c" 转换为 ["a", "b", "0", "c"]
+  const keys = path.replace(/\[(\d+)\]/g, '.$1').split('.');
+  let current = obj;
+  for (let i = 0; i < keys.length - 1; i++) {
+    const key = keys[i];
+    if (current[key] === undefined || current[key] === null) {
+      current[key] = isNaN(Number(keys[i + 1])) ? {} : [];
+    }
+    current = current[key];
+  }
+  const lastKey = keys[keys.length - 1];
+  current[lastKey] = value;
 }
 
 // WebSocketPair 类型定义
