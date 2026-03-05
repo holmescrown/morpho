@@ -1,20 +1,35 @@
-name = "project-morpho-engine"
-main = "worker/src/index.ts"
-compatibility_date = "2024-02-24"
+name = "morpho-engine"
+main = "src/worker.ts"
+compatibility_date = "2026-02-24"
 
-# 开启 Workers AI 绑定
-[ai]
-binding = "AI"
+# 静态资源部署
+[site]
+bucket = "./public"
 
-# 绑定 Durable Objects，作为物种的"生命岛屿"
+# 数据库绑定
+[[d1_databases]]
+binding = "MORPHO_DB"
+database_name = "morpho_evolution_db"
+database_id = "your-d1-db-id"
+
+# Durable Objects 绑定
 [[durable_objects.bindings]]
-name = "MORPHO_ISLAND"
-class_name = "MorphoDO"
+name = "MORPHO_BIOME"
+class_name = "LifeCycleManager"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["MorphoDO"]
+new_classes = ["LifeCycleManager"]
 
-# 为了方便本地前端调试，开启静态资源托管 (MVP 阶段)
-[site]
-bucket = "./frontend"
+# AI 与 存储 绑定
+[ai]
+binding = "MORPHO_AI"
+
+[[r2_buckets]]
+binding = "MORPHO_R2"
+bucket_name = "morpho-assets"
+
+# Vectorize 向量索引绑定
+[[vectorize]]
+binding = "MORPHO_VECTOR"
+index_name = "morpho-vectors"

@@ -7,6 +7,7 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependency directories
 node_modules
 dist
 dist-ssr
@@ -29,3 +30,20 @@ dist-ssr
 .env.development.local
 .env.test.local
 .env.production.local
+.dev.vars
+
+# Cloudflare Workers
+.wrangler
+.dev.vars
+
+# Wasm Physics Build
+project/wasm-physics/build/
+project/wasm-physics/node_modules/
+
+# Local DB / State
+*.sqlite
+*.db
+.wrangler/state
+
+# Project Archives
+_archive/

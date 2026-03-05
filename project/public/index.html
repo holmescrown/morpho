@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Morpho - MVP 观测舱</title>
+    <link rel="stylesheet" href="./src/design-system.css">
+    <style>
+        #ui-layer {
+            position: absolute;
+            top: 40px;
+            left: 40px;
+            width: 320px;
+            z-index: 10;
+            padding: 24px;
+        }
+
+        #env-input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 12px;
+            border-radius: 8px;
+            color: #fff;
+            margin-bottom: 12px;
+            outline: none;
+            transition: border 0.3s;
+        }
+
+        #env-input:focus {
+            border-color: var(--accent-color);
+        }
+
+        .btn-evolve {
+            width: 100%;
+            background: var(--accent-color);
+            color: #000;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.2s, background 0.3s;
+        }
+
+        .btn-evolve:hover {
+            transform: translateY(-2px);
+            background: #60f9ff;
+        }
+
+        #ai-log {
+            margin-top: 24px;
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: var(--accent-color);
+            border-radius: 50%;
+            margin-right: 8px;
+            box-shadow: 0 0 10px var(--accent-color);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui-layer" class="glass-panel">
+        <h3 class="neon-text">Morpho Lab</h3>
+        <p style="font-size: 12px; color: var(--text-secondary);">边缘演化观测站 v2.5</p>
+
+        <div style="margin-top: 20px;">
+            <input type="text" id="env-input" placeholder="输入环境参数..." value="极寒高压环境">
+            <button class="btn-evolve" onclick="sendEnvironment()">触发架构变异</button>
+            <button class="btn-evolve"
+                style="margin-top: 8px; background: transparent; border: 1px solid var(--accent-color); color: var(--accent-color);"
+                onclick="takePhotograph()">📸 捕获语义明信片</button>
+        </div>
+
+        <div id="ai-log">
+            <span class="status-dot"></span> 等待系统就绪...
+        </div>
+
+        <!-- P3: 创造者之眼 (Eye of Creator) 上传区 -->
+        <div style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px;">
+            <p style="font-size: 11px; color: var(--text-secondary); letter-spacing: 1px; text-transform: uppercase;">
+                创造者之眼</p>
+            <label for="photo-input" id="photo-label" style="
+                display: flex; align-items: center; justify-content: center;
+                height: 80px; border: 1px dashed rgba(0,242,255,0.3);
+                border-radius: 8px; cursor: pointer; margin-top: 8px;
+                color: var(--text-secondary); font-size: 13px;
+                transition: border 0.3s, background 0.3s;
+            " onmouseover="this.style.borderColor='var(--accent-color)'; this.style.background='rgba(0,242,255,0.05)'"
+                onmouseout="this.style.borderColor='rgba(0,242,255,0.3)'; this.style.background='transparent'">
+                📷 上传现实照片驱动进化
+            </label>
+            <input type="file" id="photo-input" accept="image/*" style="display:none"
+                onchange="handlePhotoUpload(this)">
+            <canvas id="photo-preview" width="280" height="120"
+                style="width: 100%; border-radius: 8px; margin-top: 8px; display: none;"></canvas>
+        </div>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+
+    <!-- P0.7: GM Debug Panel (Hidden by default) -->
+    <div id="gm-panel"
+        style="display: none; position: fixed; left: 20px; bottom: 100px; width: 220px; padding: 15px; background: rgba(0,0,0,0.85); backdrop-filter: blur(12px); color: white; border-radius: 12px; z-index: 1000; font-family: 'Outfit', sans-serif; font-size: 12px; border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 8px 32px rgba(0,0,0,0.5);">
+        <div
+            style="margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; color: #ffca28; font-weight: bold; display: flex; justify-content: space-between;">
+            <span>造物主权限 (GM)</span>
+            <span style="cursor:pointer" onclick="document.getElementById('gm-panel').style.display='none'">×</span>
+        </div>
+        <div style="margin-bottom: 12px;">
+            <label style="color: #aaa; margin-bottom: 4px; display: block;">强制纪元灾变:</label>
+            <select id="gm-disaster"
+                style="width: 100%; background: #222; color: #fff; border: 1px solid #444; padding: 4px; border-radius: 4px;">
+                <option value="凛冬纪元">凛冬纪元 (极寒)</option>
+                <option value="熔核纪元">熔核纪元 (高热)</option>
+                <option value="毒沼纪元">毒沼纪元 (强酸)</option>
+                <option value="太古纪元">太古纪元 (默认)</option>
+            </select>
+            <button onclick="triggerGMDisaster()"
+                style="width: 100%; margin-top: 8px; background: #d32f2f; color: white; border: none; padding: 6px; border-radius: 4px; cursor: pointer; font-weight: bold;">执行全球灾变</button>
+        </div>
+        <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px;">
+            <label style="color: #aaa; margin-bottom: 4px; display: block;">快速演化:</label>
+            <button onclick="toggleGMBypass()" id="gm-bypass-btn"
+                style="width: 100%; background: #444; color: white; border: none; padding: 6px; border-radius: 4px; cursor: pointer;">免裁判模式:
+                OFF</button>
+        </div>
+    </div>
+    <!-- Hidden trigger: Click bottom-left corner 5 times quickly -->
+    <div id="gm-trigger"
+        style="position: fixed; left: 0; bottom: 0; width: 40px; height: 40px; z-index: 1001; cursor: pointer;"
+        onclick="onGMTriggerClick()"></div>
+
+    <script>
+        let gmClicks = 0;
+        let gmTimer = null;
+        let gmBypass = false;
+
+        function onGMTriggerClick() {
+            gmClicks++;
+            clearTimeout(gmTimer);
+            gmTimer = setTimeout(() => { gmClicks = 0; }, 2000);
+            if (gmClicks >= 5) {
+                activateGM();
+                gmClicks = 0;
+            }
+        }
+
+        function activateGM() {
+            const panel = document.getElementById('gm-panel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+            if (panel.style.display === 'block') console.log("GM Mode Activated");
+        }
+
+        async function triggerGMDisaster() {
+            const env = document.getElementById('gm-disaster').value;
+            const btn = event.target;
+            btn.innerText = "正在下令...";
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/admin/trigger-disaster', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-gm-secret': 'MorphoGod' },
+                    body: JSON.stringify({ environment: env, intensity: 1.0 })
+                });
+                if (res.ok) {
+                    alert("全球灾变已下发：" + env);
+                    // 同步本地光照（如果是即时反馈）
+                    if (window.triggerEnvironment) window.triggerEnvironment(env);
+                } else {
+                    alert("执行失败，请检查 Secret 或后端状态");
+                }
+            } catch (e) {
+                alert("网络错误: " + e);
+            } finally {
+                btn.innerText = "执行全球灾变";
+                btn.disabled = false;
+            }
+        }
+
+        function toggleGMBypass() {
+            gmBypass = !gmBypass;
+            const btn = document.getElementById('gm-bypass-btn');
+            btn.innerText = `免裁判模式: ${gmBypass ? 'ON' : 'OFF'}`;
+            btn.style.background = gmBypass ? '#2e7d32' : '#444';
+            // 将此标记传回 main.js 逻辑
+            window.isGMBypass = gmBypass;
+        }
+    </script>
+</body>
+
+</html>
