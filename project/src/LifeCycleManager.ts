@@ -2,11 +2,11 @@ import { loadPhysicsWasm } from './wasmLoader';
 import { generateGenomeVector, syncToVectorize } from './vectorizeUtils';
 
 interface Env {
-  MORPHO_AI: any;
-  MORPHO_DB: any;
-  MORPHO_R2: any;
-  MORPHO_VECTOR: any;
-  MORPHO_BIOME: DurableObjectNamespace;
+  AI: any;
+  DB: any;
+  R2: any;
+  VECTOR_INDEX: any;
+  BIOME_STATE: DurableObjectNamespace;
 }
 
 export class LifeCycleManager {
@@ -42,7 +42,7 @@ export class LifeCycleManager {
       // 在生产环境中，我们可以从 R2 或 KV 获取 Wasm 二进制
       // 也可以将其作为 Base64 嵌入代码（虽不推荐但简单）
       // 这里暂时使用模拟的二进制加载逻辑
-      const response = await this.env.MORPHO_R2.get('physics.wasm');
+      const response = await this.env.R2.get('physics.wasm');
       const wasmBinary = response ? await response.arrayBuffer() : new Uint8Array();
 
       if (wasmBinary.byteLength > 0) {
@@ -171,8 +171,8 @@ export class LifeCycleManager {
     // 5. 异步同步到 Vectorize 向量库 (P1 核心逻辑)
     this.state.waitUntil((async () => {
       try {
-        const vector = await generateGenomeVector(this.env.MORPHO_AI, this.currentGenome);
-        await syncToVectorize(this.env.MORPHO_VECTOR, this.currentGenome, vector);
+        const vector = await generateGenomeVector(this.env.AI, this.currentGenome);
+        await syncToVectorize(this.env.VECTOR_INDEX, this.currentGenome, vector);
         console.log(`Vector synced for ${this.currentGenome.metadata?.genome_id || 'unknown'}`);
       } catch (e) {
         console.error("Vectorize Sync Failed:", e);
