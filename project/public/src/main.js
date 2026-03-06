@@ -1696,3 +1696,36 @@ function animate() {
             grid.appendChild(card);
         });
     }
+
+    // --- 桌面挂机模式 (Desktop Companion / Tauri Mode) ---
+    document.addEventListener("DOMContentLoaded", () => {
+        if (window.__TAURI_INTERNALS__ || window.__TAURI__) {
+            console.log("[Tauri Mode] 初始化桌面悬浮形态");
+
+            // 卸载沉浸式世界的展台与全景环境光干扰
+            scene.remove(isleGroup);
+
+            // 隐藏 UI 和无关元素
+            const uiRoot = document.getElementById("ui-root");
+            const sensoryLog = document.getElementById("sensory-log");
+            if (uiRoot) uiRoot.style.display = "none";
+            if (sensoryLog) sensoryLog.style.display = "none";
+
+            // Ghost Mode 热键穿透 (Alt + G)
+            let isGhostMode = false;
+            window.addEventListener('keydown', (e) => {
+                if (e.altKey && e.key.toLowerCase() === 'g') {
+                    isGhostMode = !isGhostMode;
+                    const invoke = window.__TAURI_INTERNALS__ ? window.__TAURI_INTERNALS__.invoke : window.__TAURI__.core.invoke;
+
+                    invoke('set_ignore_cursor_events', { ignore: isGhostMode })
+                        .then(() => {
+                            console.log('Ghost Mode:', isGhostMode);
+                            // 视觉反馈
+                            document.body.style.border = isGhostMode ? "1px solid rgba(0,255,255,0.3)" : "none";
+                        })
+                        .catch(err => console.error('Tauri Invoke Error:', err));
+                }
+            });
+        }
+    });

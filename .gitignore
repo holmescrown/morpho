@@ -9,6 +9,8 @@ lerna-debug.log*
 
 # Dependency directories
 node_modules
+project/node_modules
+.agent
 dist
 dist-ssr
 *.local
