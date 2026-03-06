@@ -1,0 +1,39 @@
+name = "morpho-engine"
+main = "src/worker.ts"
+compatibility_date = "2026-02-24"
+
+# 静态资源部署
+[site]
+bucket = "./public"
+
+# 数据库绑定
+[[d1_databases]]
+binding = "DB"
+database_name = "morpho_evolution_db"
+database_id = "8d5b8876-4238-4362-bd5e-606f42ff2230"
+
+# Durable Objects 绑定
+[[durable_objects.bindings]]
+name = "BIOME_STATE"
+class_name = "LifeCycleManager"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LifeCycleManager"]
+
+# AI 与 存储 绑定
+[ai]
+binding = "AI"
+
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "morpho-assets"
+
+# Vectorize 向量索引绑定
+[[vectorize]]
+binding = "VECTOR_INDEX"
+index_name = "morpho-vectors"
+
+# 定时任务触发器 (每天午夜执行 7/30 灾变及各类统计重置)
+[triggers]
+crons = ["0 0 * * *"]
