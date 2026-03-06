@@ -10,6 +10,26 @@ import {
     EMBRYO_AWAKENING_PHRASES
 } from './personality_engine.js';
 
+// ────────────────────────────────────────────────────────
+// 全局感知扩展 (Sensory & Narrative Utils)
+// ────────────────────────────────────────────────────────
+window.updateSensoryLog = (text, color = "rgba(255,255,255,0.7)") => {
+    const logEl = document.getElementById('sensory-log') || document.getElementById('ai-log');
+    if (!logEl) return;
+
+    // 意识流淡入淡出动效 (Stage 6)
+    logEl.style.transition = 'opacity 1s, transform 1s';
+    logEl.style.opacity = '0';
+    logEl.style.transform = 'translateY(-10px)';
+
+    setTimeout(() => {
+        logEl.innerText = text;
+        logEl.style.color = color;
+        logEl.style.opacity = '1';
+        logEl.style.transform = 'translateY(0)';
+    }, 100);
+};
+
 window.APP_MODE = 'GENESIS'; // 默认进入正式游戏态
 
 // 1. 基础场景设置
@@ -1200,11 +1220,37 @@ function animate() {
                 fishGroup.position.x += Math.sin(freq) * shake;
                 fishGroup.position.z += Math.cos(freq * 1.1) * shake;
 
-                // 核心光芒闪烁失稳
                 if (archetypeBuilder.organismState.coreMeshRef) {
                     const baseEmi = Math.max(0.1, (window.currentGenomeData?.energy_reserve ?? 100) / 100.0);
                     archetypeBuilder.organismState.coreMeshRef.material.emissiveIntensity = baseEmi * (1.0 - Math.random() * 0.7 * window.CALAMITY_STATE.intensity);
                 }
+            }
+        }
+
+        // --- 遗产协议：金缮化 (Kintsugi Mode Anim) ---
+        if (window.APP_MODE === 'DEATH_PROCESSING' && archetypeBuilder.organismState.coreMeshRef) {
+            const mat = archetypeBuilder.organismState.coreMeshRef.material;
+            // 亮金呼吸裂纹 (E:#ffcc00, 5.0, Breathing Effect)
+            const breath = 3.0 + Math.sin(time * 1.5) * 2.0;
+            mat.emissiveIntensity = breath;
+
+            // 强制石化材质属性
+            mat.roughness = 0.8;
+            mat.transmission = 0.3;
+            mat.thickness = 2.0;
+        }
+
+        // --- 意识流触发：低能量预警 (ATP < 10%) ---
+        if (window.currentGenomeData && window.currentGenomeData.energy_reserve < 10) {
+            if (!window._lastNarrativeTime || time - window._lastNarrativeTime > 30) {
+                const phrases = [
+                    "“造物主... 细胞壁正在塌缩，我需要光...”",
+                    "“能量几乎耗尽... 意识正在边缘模糊...”",
+                    "“生命特征正在流失。这种冰冷... 无法忍受。”"
+                ];
+                const randText = phrases[Math.floor(Math.random() * phrases.length)];
+                window.updateSensoryLog(randText, "#ff3333");
+                window._lastNarrativeTime = time;
             }
         }
 
@@ -1695,37 +1741,59 @@ function animate() {
         `;
             grid.appendChild(card);
         });
-    }
+    };
 
-    // --- 桌面挂机模式 (Desktop Companion / Tauri Mode) ---
+    // --- 桌面模式 & 遗产协议初始化 (DOMContentLoaded) ---
     document.addEventListener("DOMContentLoaded", () => {
+        // 1. Tauri 挂机适配
         if (window.__TAURI_INTERNALS__ || window.__TAURI__) {
             console.log("[Tauri Mode] 初始化桌面悬浮形态");
-
-            // 卸载沉浸式世界的展台与全景环境光干扰
             scene.remove(isleGroup);
-
-            // 隐藏 UI 和无关元素
             const uiRoot = document.getElementById("ui-root");
             const sensoryLog = document.getElementById("sensory-log");
             if (uiRoot) uiRoot.style.display = "none";
             if (sensoryLog) sensoryLog.style.display = "none";
 
-            // Ghost Mode 热键穿透 (Alt + G)
             let isGhostMode = false;
             window.addEventListener('keydown', (e) => {
                 if (e.altKey && e.key.toLowerCase() === 'g') {
                     isGhostMode = !isGhostMode;
                     const invoke = window.__TAURI_INTERNALS__ ? window.__TAURI_INTERNALS__.invoke : window.__TAURI__.core.invoke;
-
                     invoke('set_ignore_cursor_events', { ignore: isGhostMode })
                         .then(() => {
                             console.log('Ghost Mode:', isGhostMode);
-                            // 视觉反馈
                             document.body.style.border = isGhostMode ? "1px solid rgba(0,255,255,0.3)" : "none";
                         })
                         .catch(err => console.error('Tauri Invoke Error:', err));
                 }
             });
         }
+
+        // 2. 遗产协议：Raycaster 化石悬停交互 (Hover Epitaph)
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        window.addEventListener('mousemove', (event) => {
+            if (window.APP_MODE !== 'DEATH_PROCESSING' && !document.getElementById('legacy-gallery')?.style.display.includes('flex')) {
+                return;
+            }
+
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(scene.children, true);
+
+            if (intersects.length > 0) {
+                const intersected = intersects[0].object;
+                if (intersected === archetypeBuilder.organismState.coreMeshRef) {
+                    const epitaph = window.currentGenomeData?.legacy_epitaph || "“它曾在极端的黑暗中拒绝熄灭。”";
+                    window.updateSensoryLog(epitaph, "#ffcc00");
+                    if (window.APP_MODE === 'DEATH_PROCESSING') {
+                        intersected.material.emissiveIntensity = 8.0;
+                    }
+                }
+            }
+        });
     });
+}); // End of main closure
