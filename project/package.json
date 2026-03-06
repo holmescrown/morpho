@@ -9,7 +9,9 @@
     "build": "echo 'Build completed'"
   },
   "dependencies": {
+    "@cloudflare/kv-asset-handler": "^0.4.2",
     "@cloudflare/workers-types": "^4.20240208.0",
+    "hono": "^4.12.5",
     "typescript": "^5.4.2"
   },
   "devDependencies": {

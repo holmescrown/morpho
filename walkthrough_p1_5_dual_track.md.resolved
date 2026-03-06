@@ -1,0 +1,33 @@
+# Project Morpho：跑通阶段 (P1.5 Part 1) — 创世胚胎与双轨视听系统
+
+基于您的最新需求，我已经将底层 3D 和环境框架全面打通，这标志着 `Project Morpho` 正式具备了从“展示页”到“实验游戏”的运行地基。
+
+## 🧬 1. 从单网格到 [ArchetypeBuilder](file:///F:/Github/%E5%AD%A2%E5%AD%90%E8%BF%9B%E5%8C%96/project/public/src/ArchetypeBuilder.js#3-183) 引擎
+
+为了支持玩家未来自定义物种的变异，并彻底淘汰了旧有的硬编码单体圆球模型。
+我们提取并单独封装了 **[public/src/ArchetypeBuilder.js](file:///F:/Github/%E5%AD%A2%E5%AD%90%E8%BF%9B%E5%8C%96/project/public/src/ArchetypeBuilder.js)**：
+
+- **程序化生成骨架**：包含基于 `hox_segments` 的实时 Mesh 拼接。
+- **解耦的动画系统**：为水母、龙虾、章鱼注入了截然不同的物理推进计算（正弦收缩、附肢划水、触手拖曳的数学闭环）。
+- 这一引擎如今已与 `APP_MODE` 强绑定。
+
+## 🌗 2. 双轨游戏模式 (`APP_MODE`)
+
+您可以在界面右上角的 **Mode Panel** 测试最新的状态机：
+
+- **[GENESIS] 正式游戏态**：对应胚胎 (Embryo)。此时玩家进入的是与 Cloudflare WebSocket 直连的真实演化线，只能看到一个微光跳动的卵泡。未来所有的变异（如长嘴、长眼）都需请求 AI 与 Wasm。
+- **[SANDBOX] 博物馆展示态**：在沙盒模式下点击水母、龙虾或章鱼，前端将瞬间调用 [ArchetypeBuilder](file:///F:/Github/%E5%AD%A2%E5%AD%90%E8%BF%9B%E5%8C%96/project/public/src/ArchetypeBuilder.js#3-183) 渲染出高级物种。这些渲染和运动**均发生在前端独立内存层**，不会污染您的后端数据库（Vectorize / D1）。
+
+## 🌊 3. 全局感官总线 (`BIOME_STATE`) 接入
+
+彻底清除了原有动画帧中对环境的硬编码，引入了以数字生命深度 ($Y$ 轴) 为驱动的总线映射：
+
+- **低通滤波器 (Web Audio Filter)**：已加入由 $Y$ 距离动态控制频段的环境白噪音。当镜头潜入深空时，所有高频杂音会被“水体”吃掉，并伴发金属受压的频闪低音。
+- **视觉深度同步**：利用 WebGL Depth Texture 原理，对 FogExp2 浓度进行了联合控制。
+
+## 📸 4. 资产化接口重置
+
+原有的 [takePhotograph()](file:///F:/Github/%E5%AD%A2%E5%AD%90%E8%BF%9B%E5%8C%96/project/public/src/main.js#220-293) API 已经剥离了“截取孢子测试网格”的僵硬逻辑。它现在直接从 WebGL 上下文中剪裁出 **包含当前最高品质 PBR (Archetype) 材质的 1200x800 画幅** 的语义明信片，为接下来的 P3 阶段（AI 撰写史诗墓志铭）做好了 100% 的前端底座铺垫。
+
+### ✅ 验收指南：
+只需保证本地 Node 服务唤醒，打开您浏览器中的 `1200x800` 测试页，点击右上角的 **SANDBOX 按钮** 以及 **Genesis Button** 即可听到下潜白噪音并感受完全不同的生物表现。您可以点击“捕获语义明信片”生成最新的高清资产。

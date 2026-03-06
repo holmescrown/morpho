@@ -1,11 +1,12 @@
+import { Hono } from 'hono';
 import { loadPhysicsWasm } from './wasmLoader';
 import { generateGenomeVector, syncToVectorize } from './vectorizeUtils';
 
 interface Env {
   AI: any;
-  DB: any;
-  R2: any;
-  VECTOR_INDEX: any;
+  DB: D1Database;
+  R2: R2Bucket;
+  VECTOR_INDEX: VectorizeIndex;
   BIOME_STATE: DurableObjectNamespace;
 }
 
@@ -15,6 +16,7 @@ export class LifeCycleManager {
   sessions: WebSocket[] = [];
   currentGenome: any;
   physicsEngine: any = null;
+  app = new Hono<{ Bindings: Env }>();
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -25,7 +27,7 @@ export class LifeCycleManager {
       metadata: { genome_id: "morpho_origin_001", generation: 0 },
       morphology: {
         l_system_rules: { iterations: 2 },
-        hox_segments: [{ scaling: { length: 1.0, radius: 5.0, porosity: 0.2 }, joints: [{ stiffness: 0.5 }] }],
+        hox_segments: [{ type: "basal", scaling: { length: 1.0, radius: 5.0, porosity: 0.2 }, joints: [{ stiffness: 0.5 }] }],
         surface: { texture: "chitinous", reflectivity: 0.1, permeability: 0.05 }
       },
       metabolism: {
@@ -39,7 +41,6 @@ export class LifeCycleManager {
         recessive_traits: [],
         semantic_memory: ["太古时代：诞生于富含矿物质的浅海"]
       },
-      // 兼容旧版前端和物理验证的回退字段
       complexity: 1.0,
       traits: ["basal_metabolism"],
       turgor_pressure: 1.0,
@@ -53,18 +54,47 @@ export class LifeCycleManager {
     this.state.blockConcurrencyWhile(async () => {
       await this.initPhysics();
     });
+
+    this.setupRoutes();
+  }
+
+  private setupRoutes() {
+    // 灾变触发接口
+    this.app.post('/admin/trigger-disaster', async (c) => {
+      try {
+        const { environment, intensity } = await c.req.json() as any;
+        this.broadcast({
+          type: 'GLOBAL_DISASTER',
+          environment: environment,
+          intensity: intensity || 1.0,
+          timestamp: Date.now()
+        });
+        return c.json({ status: "SUCCESS", broadcasted: true });
+      } catch (e) {
+        return c.text(String(e), 500);
+      }
+    });
+
+    // 演进接口
+    this.app.post('/evolve', async (c) => {
+      try {
+        const body = await c.req.json() as any;
+        const mutation = body.mutation;
+        const response = await this.applyEvolution(mutation);
+        return c.json(response);
+      } catch (e) {
+        return c.json({ status: "ERROR", error: String(e) }, 400);
+      }
+    });
   }
 
   private async initPhysics() {
     try {
-      // 在生产环境中，我们可以从 R2 或 KV 获取 Wasm 二进制
-      // 也可以将其作为 Base64 嵌入代码（虽不推荐但简单）
-      // 这里暂时使用模拟的二进制加载逻辑
       const response = await this.env.R2.get('physics.wasm');
-      const wasmBinary = response ? await response.arrayBuffer() : new Uint8Array();
+      const wasmBinary = response ? await response.arrayBuffer() : new Uint8Array().buffer as ArrayBuffer;
 
       if (wasmBinary.byteLength > 0) {
-        this.physicsEngine = await loadPhysicsWasm(wasmBinary);
+        this.physicsEngine = await loadPhysicsWasm(wasmBinary as ArrayBuffer);
       }
     } catch (e) {
       console.error("Physics Engine Init Failed:", e);
@@ -74,8 +104,9 @@ export class LifeCycleManager {
   async fetch(request: Request) {
     const upgradeHeader = request.headers.get("Upgrade");
     if (upgradeHeader === "websocket") {
+      // @ts-ignore - WebSocketPair is a global in Cloudflare Workers
       const webSocketPair = new WebSocketPair();
-      const [client, server] = Object.values(webSocketPair);
+      const [client, server] = Object.values(webSocketPair) as [WebSocket, WebSocket];
 
       this.state.acceptWebSocket(server);
       this.handleSession(server);
@@ -83,60 +114,31 @@ export class LifeCycleManager {
       return new Response(null, {
         status: 101,
         webSocket: client
-      } as ResponseInit & { webSocket: WebSocket });
-    }
-
-    const url = new URL(request.url);
-    // 处理来自 Worker 的管理/测试请求
-    if (url.pathname === '/admin/trigger-disaster') {
-      try {
-        const { environment, intensity } = await request.json() as any;
-
-        // 广播灾变消息给所有前端，触发视觉更新和规则变更
-        this.broadcast({
-          type: 'GLOBAL_DISASTER',
-          environment: environment,
-          intensity: intensity || 1.0,
-          timestamp: Date.now()
-        });
-
-        return new Response(JSON.stringify({ status: "SUCCESS", broadcasted: true }), {
-          headers: { 'Content-Type': 'application/json' }
-        });
-      } catch (e) {
-        return new Response(String(e), { status: 500 });
-      }
-    }
-
-    // 处理来自 Worker 的突变请求
-    try {
-      const body = await request.json() as any;
-      const mutation = body.mutation;
-      const response = await this.applyEvolution(mutation);
-      return new Response(JSON.stringify(response), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    } catch (e) {
-      return new Response(JSON.stringify({ status: "ERROR", error: String(e) }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
       });
     }
+
+    return this.app.fetch(request);
   }
 
   private handleSession(ws: WebSocket) {
     this.sessions.push(ws);
-
-    // 发送初始基因组给刚连接的前端
     ws.send(JSON.stringify({ type: 'INIT', genome: this.currentGenome }));
 
     ws.addEventListener('message', async (event) => {
       try {
-        const data = JSON.parse(event.data);
+        const data = JSON.parse(event.data as string);
 
-        // 接收到前端传来的"环境天气"刺激
         if (data.type === 'ENVIRONMENT_TRIGGER') {
-          // 这里可以添加处理逻辑
+          // Future logic
+        }
+
+        if (data.type === 'EAT') {
+          const amount = data.amount || 15;
+          this.currentGenome.energy_reserve = Math.min(
+            (this.currentGenome.energy_reserve || 0) + amount,
+            this.currentGenome.metabolism?.energy_storage_capacity || 100
+          );
+          console.log(`[LifeCycle] Bio ${this.state.id} ate ${amount} energy. New total: ${this.currentGenome.energy_reserve}`);
         }
       } catch (e) {
         console.error('WebSocket message error:', e);
@@ -149,10 +151,17 @@ export class LifeCycleManager {
   }
 
   async applyEvolution(mutationProposal: any) {
-    // 1. 深拷贝当前基因组进行模拟验证 (P0.5 规范：通过 JSON Patch 合并改变)
+    if (mutationProposal.status === "REJECTED") {
+      const reason = mutationProposal.reason || "该形态不符合碳基生物演化法则。";
+      this.broadcast({
+        type: "MUTATION_REJECTED",
+        reason: reason
+      });
+      return { status: "REJECTED", reason: reason, genome: this.currentGenome };
+    }
+
     const newGenome = JSON.parse(JSON.stringify(this.currentGenome));
 
-    // 2. 将 JSON Patch 深度应用到 newGenome
     if (mutationProposal.patches && Array.isArray(mutationProposal.patches)) {
       for (const patch of mutationProposal.patches) {
         if (patch.op === 'replace' || patch.op === 'add') {
@@ -161,23 +170,18 @@ export class LifeCycleManager {
       }
     }
 
-    // 3. 追加遗传记忆
     if (mutationProposal.semanticMemoryEntry) {
       if (!newGenome.genetics) newGenome.genetics = {};
       if (!newGenome.genetics.semantic_memory) newGenome.genetics.semantic_memory = [];
       newGenome.genetics.semantic_memory.push(mutationProposal.semanticMemoryEntry);
     }
 
-    // 4. 调用 Wasm 模块进行硬核物理审查
     const isValid = await this.wasmValidate(newGenome);
     if (!isValid) {
       return { status: "MALFORMED", genome: this.currentGenome };
     }
 
-    // 5. 计算 ATP 代谢代价
     const atpCost = this.calculateATPCost(this.currentGenome, newGenome);
-
-    // 6. 计算熵减带来的持续消耗
     const entropyCost = this.physicsEngine
       ? this.physicsEngine.calculateEntropy(newGenome.complexity || 1.0, newGenome.adaptability || 1.0)
       : 0.1;
@@ -192,19 +196,16 @@ export class LifeCycleManager {
       };
     }
 
-    // 7. 正式更新状态
     newGenome.energy_reserve = this.currentGenome.energy_reserve - atpCost;
     if (newGenome.metadata) newGenome.metadata.generation += 1;
     this.currentGenome = newGenome;
 
-    // 4. 广播给所有连接的前端
     this.broadcast({
       type: "EVOLVE",
       data: this.currentGenome,
       status: "SUCCESS"
     });
 
-    // 5. 异步同步到 Vectorize 向量库 (P1 核心逻辑)
     this.state.waitUntil((async () => {
       try {
         const vector = await generateGenomeVector(this.env.AI, this.currentGenome);
@@ -229,9 +230,7 @@ export class LifeCycleManager {
       return this.physicsEngine.validateMutation(radius, turgor, genome.complexity || 1.0);
     }
 
-    // 回退到基于 TS 的简单验证
     if (radius < 0.1 || radius > 10.0) return false;
-
     return true;
   }
 
@@ -246,7 +245,6 @@ export class LifeCycleManager {
       return this.physicsEngine.calculateATPCost(oldRadius, newRadius, newTraitsCount);
     }
 
-    // 回退到旧逻辑
     let cost = 0;
     const sizeChange = Math.abs(newRadius - oldRadius);
     cost += sizeChange * 10;
@@ -255,9 +253,10 @@ export class LifeCycleManager {
   }
 
   private broadcast(message: object) {
+    const msg = JSON.stringify(message);
     this.sessions.forEach(session => {
       try {
-        session.send(JSON.stringify(message));
+        session.send(msg);
       } catch (e) {
         console.error('Broadcast error:', e);
       }
@@ -265,9 +264,7 @@ export class LifeCycleManager {
   }
 }
 
-// 供 P0.5 前端结构使用的深度取值赋值辅助函数
 function applyJsonPatch(obj: any, path: string, value: any) {
-  // 将 "a.b[0].c" 转换为 ["a", "b", "0", "c"]
   const keys = path.replace(/\[(\d+)\]/g, '.$1').split('.');
   let current = obj;
   for (let i = 0; i < keys.length - 1; i++) {
@@ -279,11 +276,4 @@ function applyJsonPatch(obj: any, path: string, value: any) {
   }
   const lastKey = keys[keys.length - 1];
   current[lastKey] = value;
-}
-
-// WebSocketPair 类型定义
-class WebSocketPair {
-  constructor() {
-    // 实际实现由 Cloudflare Workers 提供
-  }
 }

@@ -1,0 +1,45 @@
+# Project Morpho：太古海洋时代单机测试页 (P1.2)
+
+我们已成功构建并验证了独立的 3D 海洋模拟环境。该文件可作为移动端和 PC 端的单机交互原形。
+
+## 🌊 核心特性
+
+- **视觉氛围**: 
+    - 使用深蓝色体积雾渲染出深海的幽邃感。
+    - 地面集成了动态水波焦散 (Caustics) 着色器。
+    - “海洋雪”粒子系统增强了微观生物世界的沉浸感。
+- **数字生命 (鱼)**: 
+    - 极简几何建模（圆锥/球体/平面）。
+    - 自动化生理摆动动画（尾部与鳍部随时间正弦波动）。
+- **全端操控**: 
+    - **移动端**: 左下角动态虚拟摇杆 + 右面触控俯仰。
+    - **PC 端**: W/S (推进), A/D (偏航), 鼠标拖拽 (俯仰)。
+
+## 📸 运行快照
+
+````carousel
+![初始加载界面](file:///C:/Users/Administrator/.gemini/antigravity/brain/b2a7333c-1d63-4aa8-9ec6-1d21c56aad2e/initial_load_1772692379064.png)
+<!-- slide -->
+![俯仰角控制测试](file:///C:/Users/Administrator/.gemini/antigravity/brain/b2a7333c-1d63-4aa8-9ec6-1d21c56aad2e/pitch_change_test_1772692419884.png)
+<!-- slide -->
+```javascript
+// 核心动画逻辑快照
+const wiggle = Math.sin(time * 10) * 0.3;
+tail.rotation.y = wiggle;
+finL.rotation.z = wiggle * 0.5;
+finR.rotation.z = -wiggle * 0.5;
+```
+````
+
+## 📂 交互指引
+您可以直接打开项目根目录下的文件进行体验：
+> **[ocean_simulation.html](file:///F:/Github/孢子进化/ocean_simulation.html)**
+
+## 🧪 测试结论
+经过浏览器子代理验证：
+1. **渲染层**: 3D 模型与雾效在 PC/手机端均能保持稳定帧率。
+2. **控制层**: 输入向量 [Thrust, Pitch, Yaw] 转换准确，鱼类具备自然的游动惯性。
+3. **兼容性**: 单文件架构不依赖外部资源，离线亦可运行。
+
+> [!TIP]
+> 建议将此页面作为 P1 阶段物理验证层的视觉参照，后续我们将此动力学逻辑整合进主程序的“实验室”模块。

@@ -10,7 +10,7 @@ bucket = "./public"
 [[d1_databases]]
 binding = "DB"
 database_name = "morpho_evolution_db"
-database_id = "your-d1-db-id"
+database_id = "8d5b8876-4238-4362-bd5e-606f42ff2230"
 
 # Durable Objects 绑定
 [[durable_objects.bindings]]
@@ -19,7 +19,7 @@ class_name = "LifeCycleManager"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["LifeCycleManager"]
+new_sqlite_classes = ["LifeCycleManager"]
 
 # AI 与 存储 绑定
 [ai]
@@ -33,3 +33,7 @@ bucket_name = "morpho-assets"
 [[vectorize]]
 binding = "VECTOR_INDEX"
 index_name = "morpho-vectors"
+
+# 定时任务触发器 (每天午夜执行 7/30 灾变及各类统计重置)
+[triggers]
+crons = ["0 0 * * *"]
